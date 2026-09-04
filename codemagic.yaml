@@ -6,8 +6,9 @@ workflows:
     scripts:
       - name: Create Android project and restore main
         script: |
+          cp lib/main.dart lib/main.dart.bak
           flutter create --platforms=android --org com.example .
-          git checkout lib/main.dart
+          mv lib/main.dart.bak lib/main.dart
       - name: Build APK
         script: |
           flutter build apk --release
