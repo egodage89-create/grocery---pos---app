@@ -4,7 +4,7 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m1
     scripts:
-      - name: Create Android project and apply clean main.dart
+      - name: Create Android project and apply POS UI
         script: |
           flutter create --platforms=android --org com.example .
           mkdir -p lib
@@ -28,48 +28,191 @@ workflows:
                   colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
                   useMaterial3: true,
                 ),
-                home: const HomeScreen(),
+                home: const PosDashboardScreen(),
               );
             }
           }
 
-          class HomeScreen extends StatelessWidget {
-            const HomeScreen({super.key});
+          class Product {
+            final String name;
+            final double price;
+            final String icon;
+
+            Product({required this.name, required this.price, required this.icon});
+          }
+
+          class PosDashboardScreen extends StatefulWidget {
+            const PosDashboardScreen({super.key});
+
+            @override
+            State<PosDashboardScreen> createState() => _PosDashboardScreenState();
+          }
+
+          class _PosDashboardScreenState extends State<PosDashboardScreen> {
+            final List<Product> _products = [
+              Product(name: 'සහල් (Rice) 1kg', price: 220.0, icon: '🌾'),
+              Product(name: 'සීනි (Sugar) 1kg', price: 280.0, icon: '🍬'),
+              Product(name: 'පිටි කිරි (Milk) 400g', price: 1050.0, icon: '🥛'),
+              Product(name: 'තේ කොළ (Tea) 100g', price: 250.0, icon: '☕'),
+              Product(name: 'පාන් (Bread)', price: 140.0, icon: '🍞'),
+              Product(name: 'පරිප්පු (Dhal) 1kg', price: 320.0, icon: '🥣'),
+            ];
+
+            final Map<Product, int> _cart = {};
+
+            void _addToCart(Product product) {
+              setState(() {
+                if (_cart.containsKey(product)) {
+                  _cart[product] = _cart[product]! + 1;
+                } else {
+                  _cart[product] = 1;
+                }
+              });
+            }
+
+            void _removeFromCart(Product product) {
+              setState(() {
+                if (_cart.containsKey(product)) {
+                  if (_cart[product]! > 1) {
+                    _cart[product] = _cart[product]! - 1;
+                  } else {
+                    _cart.remove(product);
+                  }
+                }
+              });
+            }
+
+            double get _totalPrice {
+              double total = 0;
+              _cart.forEach((product, quantity) {
+                total += product.price * quantity;
+              });
+              return total;
+            }
+
+            int get _totalItems {
+              int count = 0;
+              _cart.forEach((_, quantity) {
+                count += quantity;
+              });
+              return count;
+            }
 
             @override
             Widget build(BuildContext context) {
               return Scaffold(
                 appBar: AppBar(
-                  title: const Text('Grocery POS App'),
+                  title: const Text('Grocery POS System'),
                   backgroundColor: Colors.deepPurple,
                   foregroundColor: Colors.white,
-                  centerTitle: true,
+                  actions: [
+                    IconButton(
+                      icon: const Icon(Icons.refresh),
+                      onPressed: () {
+                        setState(() {
+                          _cart.clear();
+                        });
+                      },
+                    )
+                  ],
                 ),
-                body: const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.shopping_cart,
-                        size: 80,
-                        color: Colors.deepPurple,
+                body: Column(
+                  children: [
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: _products.length,
+                        itemBuilder: (context, index) {
+                          final product = _products[index];
+                          final qty = _cart[product] ?? 0;
+
+                          return Card(
+                            margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            child: ListTile(
+                              leading: Text(product.icon, style: const TextStyle(fontSize: 28)),
+                              title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              subtitle: Text('රු. ${product.price.toStringAsFixed(2)}'),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (qty > 0) ...[
+                                    IconButton(
+                                      icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+                                      onPressed: () => _removeFromCart(product),
+                                    ),
+                                    Text('$qty', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                  ],
+                                  IconButton(
+                                    icon: const Icon(Icons.add_circle_outline, color: Colors.green),
+                                    onPressed: () => _addToCart(product),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                      SizedBox(height: 16),
-                      Text(
-                        'Grocery POS Application',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.deepPurple.shade50,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, -2),
+                          ),
+                        ],
                       ),
-                      SizedBox(height: 8),
-                      Text(
-                        'සිල්ලර වෙළඳසැල් කළමනාකරණ පද්ධතිය',
-                        style: TextStyle(fontSize: 16, color: Colors.grey),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('භාණ්ඩ ගණන: $_totalItems', style: const TextStyle(fontSize: 14)),
+                              Text(
+                                'එකතුව: රු. ${_totalPrice.toStringAsFixed(2)}',
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.deepPurple),
+                              ),
+                            ],
+                          ),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.deepPurple,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            ),
+                            onPressed: _totalItems == 0
+                                ? null
+                                : () {
+                                    showDialog(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: const Text('ගෙවීම සාර්ථකයි!'),
+                                        content: Text('මුළු මුදල: රු. ${_totalPrice.toStringAsFixed(2)}'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () {
+                                              setState(() {
+                                                _cart.clear();
+                                              });
+                                              Navigator.pop(context);
+                                            },
+                                            child: const Text('OK'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                            icon: const Icon(Icons.print),
+                            label: const Text('Bill කරමු'),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               );
             }
