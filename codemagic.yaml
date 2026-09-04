@@ -1,12 +1,13 @@
 workflows:
   android-workflow:
     name: Android APK Workflow
-    max_build_duration: 30
+    max_build_duration: 60
     instance_type: mac_mini_m1
     scripts:
-      - name: Create Android project
+      - name: Create Android project and restore main
         script: |
           flutter create --platforms=android --org com.example .
+          git checkout lib/main.dart
       - name: Build APK
         script: |
           flutter build apk --release
