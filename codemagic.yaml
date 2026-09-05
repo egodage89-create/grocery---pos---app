@@ -4,12 +4,15 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m1
     scripts:
-      - name: Create Android project and apply POS UI
+      - name: Create Android project and apply SQLite POS UI
         script: |
           flutter create --platforms=android --org com.example .
+          flutter pub add sqflite path
           mkdir -p lib
           cat << 'EOF' > lib/main.dart
           import 'package:flutter/material.dart';
+          import 'package:sqflite/sqflite.dart';
+          import 'package:path/path.dart' as p;
 
           void main() {
             WidgetsFlutterBinding.ensureInitialized();
@@ -28,122 +31,461 @@ workflows:
                   colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
                   useMaterial3: true,
                 ),
-                home: const PosDashboardScreen(),
+                home: const MainNavigationScreen(),
               );
             }
           }
 
           class Product {
+            final int? id;
             final String name;
             final double price;
+            final int stock;
+            final String barcode;
             final String icon;
 
-            Product({required this.name, required this.price, required this.icon});
+            Product({
+              this.id,
+              required this.name,
+              required this.price,
+              required this.stock,
+              required this.barcode,
+              required this.icon,
+            });
+
+            Map<String, dynamic> toMap() {
+              return {
+                'id': id,
+                'name': name,
+                'price': price,
+                'stock': stock,
+                'barcode': barcode,
+                'icon': icon,
+              };
+            }
+
+            factory Product.fromMap(Map<String, dynamic> map) {
+              return Product(
+                id: map['id'],
+                name: map['name'],
+                price: (map['price'] as num).toDouble(),
+                stock: map['stock'],
+                barcode: map['barcode'] ?? '',
+                icon: map['icon'] ?? '📦',
+              );
+            }
           }
 
-          class PosDashboardScreen extends StatefulWidget {
-            const PosDashboardScreen({super.key});
+          class DatabaseHelper {
+            static final DatabaseHelper instance = DatabaseHelper._init();
+            static Database? _database;
+
+            DatabaseHelper._init();
+
+            Future<Database> get database async {
+              if (_database != null) return _database!;
+              _database = await _initDB('grocery_pos.db');
+              return _database!;
+            }
+
+            Future<Database> _initDB(String filePath) async {
+              final dbPath = await getDatabasesPath();
+              final path = p.join(dbPath, filePath);
+
+              return await openDatabase(
+                path,
+                version: 1,
+                onCreate: _createDB,
+              );
+            }
+
+            Future _createDB(Database db, int version) async {
+              await db.execute('''
+                CREATE TABLE products (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  name TEXT NOT NULL,
+                  price REAL NOT NULL,
+                  stock INTEGER NOT NULL,
+                  barcode TEXT,
+                  icon TEXT
+                )
+              ''');
+
+              await db.insert('products', {'name': 'සහල් (Rice) 1kg', 'price': 220.0, 'stock': 50, 'barcode': '1001', 'icon': '🌾'});
+              await db.insert('products', {'name': 'සීනි (Sugar) 1kg', 'price': 280.0, 'stock': 30, 'barcode': '1002', 'icon': '🍬'});
+              await db.insert('products', {'name': 'පිටි කිරි (Milk) 400g', 'price': 1050.0, 'stock': 20, 'barcode': '1003', 'icon': '🥛'});
+            }
+
+            Future<List<Product>> getAllProducts() async {
+              final db = await instance.database;
+              final result = await db.query('products', orderBy: 'id DESC');
+              return result.map((json) => Product.fromMap(json)).toList();
+            }
+
+            Future<int> insertProduct(Product product) async {
+              final db = await instance.database;
+              return await db.insert('products', product.toMap());
+            }
+
+            Future<int> updateProduct(Product product) async {
+              final db = await instance.database;
+              return await db.update('products', product.toMap(), where: 'id = ?', whereArgs: [product.id]);
+            }
+
+            Future<int> deleteProduct(int id) async {
+              final db = await instance.database;
+              return await db.delete('products', where: 'id = ?', whereArgs: [id]);
+            }
+
+            Future<void> updateStockAfterSale(int productId, int quantitySold) async {
+              final db = await instance.database;
+              await db.rawUpdate(
+                'UPDATE products SET stock = stock - ? WHERE id = ?',
+                [quantitySold, productId],
+              );
+            }
+          }
+
+          class MainNavigationScreen extends StatefulWidget {
+            const MainNavigationScreen({super.key});
 
             @override
-            State<PosDashboardScreen> createState() => _PosDashboardScreenState();
+            State<MainNavigationScreen> createState() => _MainNavigationScreenState();
           }
 
-          class _PosDashboardScreenState extends State<PosDashboardScreen> {
-            final List<Product> _products = [
-              Product(name: 'සහල් (Rice) 1kg', price: 220.0, icon: '🌾'),
-              Product(name: 'සීනි (Sugar) 1kg', price: 280.0, icon: '🍬'),
-              Product(name: 'පිටි කිරි (Milk) 400g', price: 1050.0, icon: '🥛'),
-              Product(name: 'තේ කොළ (Tea) 100g', price: 250.0, icon: '☕'),
-              Product(name: 'පාන් (Bread)', price: 140.0, icon: '🍞'),
-              Product(name: 'පරිප්පු (Dhal) 1kg', price: 320.0, icon: '🥣'),
+          class _MainNavigationScreenState extends State<MainNavigationScreen> {
+            int _currentIndex = 0;
+
+            final List<Widget> _screens = [
+              const PosSaleScreen(),
+              const ProductAdminScreen(),
             ];
 
-            final Map<Product, int> _cart = {};
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                body: _screens[_currentIndex],
+                bottomNavigationBar: BottomNavigationBar(
+                  currentIndex: _currentIndex,
+                  onTap: (index) => setState(() => _currentIndex = index),
+                  selectedItemColor: Colors.deepPurple,
+                  items: const [
+                    BottomNavigationBarItem(icon: Icon(Icons.point_of_sale), label: 'POS විකුණුම්'),
+                    BottomNavigationBarItem(icon: Icon(Icons.inventory), label: 'භාණ්ඩ කළමනාකරණය'),
+                  ],
+                ),
+              );
+            }
+          }
 
-            void _addToCart(Product product) {
+          class PosSaleScreen extends StatefulWidget {
+            const PosSaleScreen({super.key});
+
+            @override
+            State<PosSaleScreen> createState() => _PosSaleScreenState();
+          }
+
+          class _PosSaleScreenState extends State<PosSaleScreen> {
+            List<Product> _products = [];
+            final Map<int, int> _cart = {};
+            bool _isLoading = true;
+
+            @override
+            void initState() {
+              super.initState();
+              _loadProducts();
+            }
+
+            Future<void> _loadProducts() async {
+              setState(() => _isLoading = true);
+              final products = await DatabaseHelper.instance.getAllProducts();
               setState(() {
-                if (_cart.containsKey(product)) {
-                  _cart[product] = _cart[product]! + 1;
-                } else {
-                  _cart[product] = 1;
-                }
+                _products = products;
+                _isLoading = false;
               });
             }
 
+            void _addToCart(Product product) {
+              final currentQty = _cart[product.id] ?? 0;
+              if (currentQty < product.stock) {
+                setState(() {
+                  _cart[product.id!] = currentQty + 1;
+                });
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('තොග සීමාව ඉක්මවා ඇත!')),
+                );
+              }
+            }
+
             void _removeFromCart(Product product) {
-              setState(() {
-                if (_cart.containsKey(product)) {
-                  if (_cart[product]! > 1) {
-                    _cart[product] = _cart[product]! - 1;
+              final currentQty = _cart[product.id];
+              if (currentQty != null) {
+                setState(() {
+                  if (currentQty > 1) {
+                    _cart[product.id!] = currentQty - 1;
                   } else {
-                    _cart.remove(product);
+                    _cart.remove(product.id);
                   }
-                }
-              });
+                });
+              }
             }
 
             double get _totalPrice {
               double total = 0;
-              _cart.forEach((product, quantity) {
-                total += product.price * quantity;
+              _cart.forEach((id, qty) {
+                final product = _products.firstWhere((p) => p.id == id);
+                total += product.price * qty;
               });
               return total;
             }
 
             int get _totalItems {
               int count = 0;
-              _cart.forEach((_, quantity) {
-                count += quantity;
-              });
+              _cart.forEach((_, qty) => count += qty);
               return count;
+            }
+
+            Future<void> _processCheckout() async {
+              for (var entry in _cart.entries) {
+                await DatabaseHelper.instance.updateStockAfterSale(entry.key, entry.value);
+              }
+              setState(() => _cart.clear());
+              await _loadProducts();
             }
 
             @override
             Widget build(BuildContext context) {
               return Scaffold(
                 appBar: AppBar(
-                  title: const Text('Grocery POS System'),
+                  title: const Text('POS Sales'),
                   backgroundColor: Colors.deepPurple,
                   foregroundColor: Colors.white,
                   actions: [
                     IconButton(
                       icon: const Icon(Icons.refresh),
-                      onPressed: () {
-                        setState(() {
-                          _cart.clear();
-                        });
-                      },
+                      onPressed: _loadProducts,
                     )
                   ],
                 ),
-                body: Column(
-                  children: [
-                    Expanded(
-                      child: ListView.builder(
+                body: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : Column(
+                        children: [
+                          Expanded(
+                            child: ListView.builder(
+                              itemCount: _products.length,
+                              itemBuilder: (context, index) {
+                                final product = _products[index];
+                                final qty = _cart[product.id] ?? 0;
+
+                                return Card(
+                                  margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  child: ListTile(
+                                    leading: Text(product.icon, style: const TextStyle(fontSize: 28)),
+                                    title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    subtitle: Text('රු. ${product.price.toStringAsFixed(2)} | තොගය: ${product.stock}'),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (qty > 0) ...[
+                                          IconButton(
+                                            icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+                                            onPressed: () => _removeFromCart(product),
+                                          ),
+                                          Text('$qty', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                        ],
+                                        IconButton(
+                                          icon: const Icon(Icons.add_circle_outline, color: Colors.green),
+                                          onPressed: () => _addToCart(product),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.deepPurple.shade50,
+                              boxShadow: [
+                                BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, -2)),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('භාණ්ඩ ගණන: $_totalItems', style: const TextStyle(fontSize: 14)),
+                                    Text(
+                                      'එකතුව: රු. ${_totalPrice.toStringAsFixed(2)}',
+                                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.deepPurple),
+                                    ),
+                                  ],
+                                ),
+                                ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.deepPurple,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                  ),
+                                  onPressed: _totalItems == 0
+                                      ? null
+                                      : () {
+                                          showDialog(
+                                            context: context,
+                                            builder: (context) => AlertDialog(
+                                              title: const Text('ගෙවීම සාර්ථකයි!'),
+                                              content: Text('මුළු මුදල: රු. ${_totalPrice.toStringAsFixed(2)}'),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () async {
+                                                    Navigator.pop(context);
+                                                    await _processCheckout();
+                                                  },
+                                                  child: const Text('OK'),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                  icon: const Icon(Icons.print),
+                                  label: const Text('Bill කරමු'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+              );
+            }
+          }
+
+          class ProductAdminScreen extends StatefulWidget {
+            const ProductAdminScreen({super.key});
+
+            @override
+            State<ProductAdminScreen> createState() => _ProductAdminScreenState();
+          }
+
+          class _ProductAdminScreenState extends State<ProductAdminScreen> {
+            List<Product> _products = [];
+            bool _isLoading = true;
+
+            @override
+            void initState() {
+              super.initState();
+              _loadProducts();
+            }
+
+            Future<void> _loadProducts() async {
+              setState(() => _isLoading = true);
+              final products = await DatabaseHelper.instance.getAllProducts();
+              setState(() {
+                _products = products;
+                _isLoading = false;
+              });
+            }
+
+            void _showProductForm({Product? product}) {
+              final nameController = TextEditingController(text: product?.name ?? '');
+              final priceController = TextEditingController(text: product != null ? product.price.toString() : '');
+              final stockController = TextEditingController(text: product != null ? product.stock.toString() : '');
+              final barcodeController = TextEditingController(text: product?.barcode ?? '');
+              final iconController = TextEditingController(text: product?.icon ?? '📦');
+
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: Text(product == null ? 'අලුත් භාණ්ඩයක් එක් කරන්න' : 'භාණ්ඩය සංස්කරණය කරන්න'),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextField(controller: nameController, decoration: const InputDecoration(labelText: 'භාණ්ඩයේ නම')),
+                        TextField(controller: priceController, decoration: const InputDecoration(labelText: 'මිල (රු.)'), keyboardType: TextInputType.number),
+                        TextField(controller: stockController, decoration: const InputDecoration(labelText: 'තොග ප්‍රමාණය'), keyboardType: TextInputType.number),
+                        TextField(controller: barcodeController, decoration: const InputDecoration(labelText: 'Barcode අංකය')),
+                        TextField(controller: iconController, decoration: const InputDecoration(labelText: 'Emoji Icon')),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('අවලංගුයි')),
+                    ElevatedButton(
+                      onPressed: () async {
+                        final name = nameController.text.trim();
+                        final price = double.tryParse(priceController.text) ?? 0.0;
+                        final stock = int.tryParse(stockController.text) ?? 0;
+                        final barcode = barcodeController.text.trim();
+                        final icon = iconController.text.trim();
+
+                        if (name.isNotEmpty && price > 0) {
+                          final newProduct = Product(
+                            id: product?.id,
+                            name: name,
+                            price: price,
+                            stock: stock,
+                            barcode: barcode,
+                            icon: icon.isEmpty ? '📦' : icon,
+                          );
+
+                          if (product == null) {
+                            await DatabaseHelper.instance.insertProduct(newProduct);
+                          } else {
+                            await DatabaseHelper.instance.updateProduct(newProduct);
+                          }
+
+                          Navigator.pop(context);
+                          _loadProducts();
+                        }
+                      },
+                      child: const Text('සුරකින්න'),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            Future<void> _deleteProduct(int id) async {
+              await DatabaseHelper.instance.deleteProduct(id);
+              _loadProducts();
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                appBar: AppBar(
+                  title: const Text('Product Inventory'),
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
+                ),
+                body: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView.builder(
                         itemCount: _products.length,
                         itemBuilder: (context, index) {
                           final product = _products[index];
-                          final qty = _cart[product] ?? 0;
-
                           return Card(
                             margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                             child: ListTile(
                               leading: Text(product.icon, style: const TextStyle(fontSize: 28)),
                               title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text('රු. ${product.price.toStringAsFixed(2)}'),
+                              subtitle: Text('මිල: රු. ${product.price.toStringAsFixed(2)} | තොගය: ${product.stock} | Barcode: ${product.barcode}'),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  if (qty > 0) ...[
-                                    IconButton(
-                                      icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
-                                      onPressed: () => _removeFromCart(product),
-                                    ),
-                                    Text('$qty', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                                  ],
                                   IconButton(
-                                    icon: const Icon(Icons.add_circle_outline, color: Colors.green),
-                                    onPressed: () => _addToCart(product),
+                                    icon: const Icon(Icons.edit, color: Colors.blue),
+                                    onPressed: () => _showProductForm(product: product),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete, color: Colors.red),
+                                    onPressed: () => _deleteProduct(product.id!),
                                   ),
                                 ],
                               ),
@@ -151,68 +493,12 @@ workflows:
                           );
                         },
                       ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.deepPurple.shade50,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 4,
-                            offset: const Offset(0, -2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text('භාණ්ඩ ගණන: $_totalItems', style: const TextStyle(fontSize: 14)),
-                              Text(
-                                'එකතුව: රු. ${_totalPrice.toStringAsFixed(2)}',
-                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.deepPurple),
-                              ),
-                            ],
-                          ),
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.deepPurple,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                            ),
-                            onPressed: _totalItems == 0
-                                ? null
-                                : () {
-                                    showDialog(
-                                      context: context,
-                                      builder: (context) => AlertDialog(
-                                        title: const Text('ගෙවීම සාර්ථකයි!'),
-                                        content: Text('මුළු මුදල: රු. ${_totalPrice.toStringAsFixed(2)}'),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () {
-                                              setState(() {
-                                                _cart.clear();
-                                              });
-                                              Navigator.pop(context);
-                                            },
-                                            child: const Text('OK'),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                            icon: const Icon(Icons.print),
-                            label: const Text('Bill කරමු'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                floatingActionButton: FloatingActionButton.extended(
+                  onPressed: () => _showProductForm(),
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
+                  icon: const Icon(Icons.add),
+                  label: const Text('අලුත් භාණ්ඩයක්'),
                 ),
               );
             }
