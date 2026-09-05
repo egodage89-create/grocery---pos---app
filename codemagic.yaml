@@ -4,7 +4,7 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m1
     scripts:
-      - name: Create Android project with Full POS Features
+      - name: Create Lanka Super Modern POS App
         script: |
           flutter create --platforms=android --org com.example .
           flutter pub add sqflite path mobile_scanner pdf printing intl
@@ -36,48 +36,239 @@ workflows:
             runApp(const GroceryPosApp());
           }
 
-          class GroceryPosApp extends StatelessWidget {
+          class GroceryPosApp extends StatefulWidget {
             const GroceryPosApp({super.key});
+
+            @override
+            State<GroceryPosApp> createState() => _GroceryPosAppState();
+          }
+
+          class _GroceryPosAppState extends State<GroceryPosApp> {
+            bool isEnglish = false;
+
+            void toggleLanguage() {
+              setState(() {
+                isEnglish = !isEnglish;
+              });
+            }
 
             @override
             Widget build(BuildContext context) {
               return MaterialApp(
-                title: 'Grocery POS',
+                title: 'ලංකා සුපර් POS',
                 debugShowCheckedModeBanner: false,
                 theme: ThemeData(
-                  colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+                  colorScheme: ColorScheme.fromSeed(
+                    seedColor: const Color(0xFF007A4D),
+                    primary: const Color(0xFF007A4D),
+                  ),
+                  scaffoldBackgroundColor: const Color(0xFFF4F8F5),
                   useMaterial3: true,
                 ),
-                home: const MainNavigationScreen(),
+                home: PhoneLoginScreen(
+                  isEnglish: isEnglish,
+                  onToggleLanguage: toggleLanguage,
+                ),
               );
             }
           }
 
+          // Phone Login Screen
+          class PhoneLoginScreen extends StatefulWidget {
+            final bool isEnglish;
+            final VoidCallback onToggleLanguage;
+
+            const PhoneLoginScreen({
+              super.key,
+              required this.isEnglish,
+              required this.onToggleLanguage,
+            });
+
+            @override
+            State<PhoneLoginScreen> createState() => _PhoneLoginScreenState();
+          }
+
+          class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
+            final TextEditingController _phoneController = TextEditingController();
+
+            void _login() {
+              if (_phoneController.text.trim().length >= 9) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => MainNavigationScreen(
+                      isEnglish: widget.isEnglish,
+                      onToggleLanguage: widget.onToggleLanguage,
+                    ),
+                  ),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      widget.isEnglish
+                          ? 'Please enter a valid phone number'
+                          : 'කරුණාකර නිවැරදි දුරකථන අංකයක් ඇතුළත් කරන්න',
+                    ),
+                  ),
+                );
+              }
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                appBar: AppBar(
+                  backgroundColor: const Color(0xFF007A4D),
+                  actions: [
+                    Container(
+                      margin: const EdgeInsets.only(right: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        children: [
+                          GestureDetector(
+                            onTap: widget.isEnglish ? widget.onToggleLanguage : null,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: !widget.isEnglish ? Colors.white : Colors.transparent,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                'සිංහල',
+                                style: TextStyle(
+                                  color: !widget.isEnglish ? const Color(0xFF007A4D) : Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: !widget.isEnglish ? widget.onToggleLanguage : null,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: widget.isEnglish ? Colors.white : Colors.transparent,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                'EN',
+                                style: TextStyle(
+                                  color: widget.isEnglish ? const Color(0xFF007A4D) : Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  ],
+                ),
+                body: Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF007A4D).withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.storefront, size: 70, color: Color(0xFF007A4D)),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          widget.isEnglish ? 'Lanka Super' : 'ලංකා සුපර්',
+                          style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF007A4D)),
+                        ),
+                        Text(
+                          widget.isEnglish ? 'Small Retail Store POS' : 'කුඩා සිල්ලර වෙළඳසැල',
+                          style: const TextStyle(fontSize: 14, color: Colors.grey),
+                        ),
+                        const SizedBox(height: 30),
+                        TextField(
+                          controller: _phoneController,
+                          keyboardType: TextInputType.phone,
+                          decoration: InputDecoration(
+                            prefixIcon: const Icon(Icons.phone, color: Color(0xFF007A4D)),
+                            labelText: widget.isEnglish ? 'Phone Number' : 'දුරකථන අංකය',
+                            hintText: '07X XXX XXXX',
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF007A4D),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: _login,
+                            child: Text(
+                              widget.isEnglish ? 'LOGIN' : 'ඇතුළු වන්න',
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+          }
+
+          // Model Data
           class Product {
             final int? id;
             final String name;
+            final String nameEn;
+            final String category;
+            final double buyingPrice;
             final double price;
+            final String unit;
             final int stock;
             final String barcode;
-            final String icon;
+            final String colorHex;
 
             Product({
               this.id,
               required this.name,
+              required this.nameEn,
+              required this.category,
+              required this.buyingPrice,
               required this.price,
+              required this.unit,
               required this.stock,
               required this.barcode,
-              required this.icon,
+              required this.colorHex,
             });
 
             Map<String, dynamic> toMap() {
               return {
                 'id': id,
                 'name': name,
+                'name_en': nameEn,
+                'category': category,
+                'buying_price': buyingPrice,
                 'price': price,
+                'unit': unit,
                 'stock': stock,
                 'barcode': barcode,
-                'icon': icon,
+                'color_hex': colorHex,
               };
             }
 
@@ -85,14 +276,19 @@ workflows:
               return Product(
                 id: map['id'],
                 name: map['name'],
+                nameEn: map['name_en'] ?? '',
+                category: map['category'] ?? 'General',
+                buyingPrice: (map['buying_price'] as num?)?.toDouble() ?? 0.0,
                 price: (map['price'] as num).toDouble(),
+                unit: map['unit'] ?? 'kg',
                 stock: map['stock'],
                 barcode: map['barcode'] ?? '',
-                icon: map['icon'] ?? '📦',
+                colorHex: map['color_hex'] ?? '#BFF3D4',
               );
             }
           }
 
+          // Database
           class DatabaseHelper {
             static final DatabaseHelper instance = DatabaseHelper._init();
             static Database? _database;
@@ -101,7 +297,7 @@ workflows:
 
             Future<Database> get database async {
               if (_database != null) return _database!;
-              _database = await _initDB('grocery_pos.db');
+              _database = await _initDB('lanka_super_pos.db');
               return _database!;
             }
 
@@ -111,20 +307,8 @@ workflows:
 
               return await openDatabase(
                 path,
-                version: 2,
+                version: 1,
                 onCreate: _createDB,
-                onUpgrade: (db, oldVersion, newVersion) async {
-                  if (oldVersion < 2) {
-                    await db.execute('''
-                      CREATE TABLE sales (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        total_amount REAL NOT NULL,
-                        total_items INTEGER NOT NULL,
-                        created_at TEXT NOT NULL
-                      )
-                    ''');
-                  }
-                },
               );
             }
 
@@ -133,10 +317,14 @@ workflows:
                 CREATE TABLE products (
                   id INTEGER PRIMARY KEY AUTOINCREMENT,
                   name TEXT NOT NULL,
+                  name_en TEXT,
+                  category TEXT,
+                  buying_price REAL NOT NULL DEFAULT 0.0,
                   price REAL NOT NULL,
+                  unit TEXT DEFAULT 'kg',
                   stock INTEGER NOT NULL,
                   barcode TEXT,
-                  icon TEXT
+                  color_hex TEXT
                 )
               ''');
 
@@ -144,14 +332,47 @@ workflows:
                 CREATE TABLE sales (
                   id INTEGER PRIMARY KEY AUTOINCREMENT,
                   total_amount REAL NOT NULL,
+                  total_profit REAL NOT NULL DEFAULT 0.0,
                   total_items INTEGER NOT NULL,
                   created_at TEXT NOT NULL
                 )
               ''');
 
-              await db.insert('products', {'name': 'සහල් (Rice) 1kg', 'price': 220.0, 'stock': 50, 'barcode': '1001', 'icon': '🌾'});
-              await db.insert('products', {'name': 'සීනි (Sugar) 1kg', 'price': 280.0, 'stock': 30, 'barcode': '1002', 'icon': '🍬'});
-              await db.insert('products', {'name': 'පිටි කිරි (Milk) 400g', 'price': 1050.0, 'stock': 20, 'barcode': '1003', 'icon': '🥛'});
+              await db.insert('products', {
+                'name': 'කීරි සම්බා සහල්',
+                'name_en': 'Keeri Samba Rice',
+                'category': 'සහල් සහ ධාන්‍ය',
+                'buying_price': 290.0,
+                'price': 340.0,
+                'unit': 'kg',
+                'stock': 85,
+                'barcode': '1001',
+                'color_hex': '#BFF3D4',
+              });
+
+              await db.insert('products', {
+                'name': 'සුදු සීනි',
+                'name_en': 'White Sugar',
+                'category': 'මූලික ද්‍රව්‍ය',
+                'buying_price': 210.0,
+                'price': 240.0,
+                'unit': 'kg',
+                'stock': 120,
+                'barcode': '1002',
+                'color_hex': '#FFE5C4',
+              });
+
+              await db.insert('products', {
+                'name': 'පිටි කිරි',
+                'name_en': 'Milk Powder',
+                'category': 'කිරි ආහාර',
+                'buying_price': 1050.0,
+                'price': 1150.0,
+                'unit': 'pkt',
+                'stock': 1,
+                'barcode': '1003',
+                'color_hex': '#D4E5FF',
+              });
             }
 
             Future<List<Product>> getAllProducts() async {
@@ -175,12 +396,13 @@ workflows:
               return await db.delete('products', where: 'id = ?', whereArgs: [id]);
             }
 
-            Future<void> recordSale(double totalAmount, int totalItems, Map<Product, int> cartItems) async {
+            Future<void> recordSale(double totalAmount, double totalProfit, int totalItems, Map<Product, int> cartItems) async {
               final db = await instance.database;
               final now = DateTime.now().toIso8601String();
 
               await db.insert('sales', {
                 'total_amount': totalAmount,
+                'total_profit': totalProfit,
                 'total_items': totalItems,
                 'created_at': now,
               });
@@ -199,87 +421,43 @@ workflows:
             }
           }
 
+          // Main Screen Layout
           class MainNavigationScreen extends StatefulWidget {
-            const MainNavigationScreen({super.key});
+            final bool isEnglish;
+            final VoidCallback onToggleLanguage;
+
+            const MainNavigationScreen({
+              super.key,
+              required this.isEnglish,
+              required this.onToggleLanguage,
+            });
 
             @override
             State<MainNavigationScreen> createState() => _MainNavigationScreenState();
           }
 
           class _MainNavigationScreenState extends State<MainNavigationScreen> {
-            int _currentIndex = 0;
-
-            final List<Widget> _screens = [
-              const PosSaleScreen(),
-              const ProductAdminScreen(),
-              const SalesReportScreen(),
-            ];
-
-            @override
-            Widget build(BuildContext context) {
-              return Scaffold(
-                body: _screens[_currentIndex],
-                bottomNavigationBar: BottomNavigationBar(
-                  currentIndex: _currentIndex,
-                  onTap: (index) => setState(() => _currentIndex = index),
-                  selectedItemColor: Colors.deepPurple,
-                  items: const [
-                    BottomNavigationBarItem(icon: Icon(Icons.point_of_sale), label: 'POS විකුණුම්'),
-                    BottomNavigationBarItem(icon: Icon(Icons.inventory), label: 'භාණ්ඩ කළමනාකරණය'),
-                    BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'අලෙවි වාර්තා'),
-                  ],
-                ),
-              );
-            }
-          }
-
-          class BarcodeScannerScreen extends StatelessWidget {
-            const BarcodeScannerScreen({super.key});
-
-            @override
-            Widget build(BuildContext context) {
-              return Scaffold(
-                appBar: AppBar(
-                  title: const Text('Barcode Scan කරන්න'),
-                  backgroundColor: Colors.deepPurple,
-                  foregroundColor: Colors.white,
-                ),
-                body: MobileScanner(
-                  onDetect: (capture) {
-                    final List<Barcode> barcodes = capture.barcodes;
-                    if (barcodes.isNotEmpty && barcodes.first.rawValue != null) {
-                      final String code = barcodes.first.rawValue!;
-                      Navigator.pop(context, code);
-                    }
-                  },
-                ),
-              );
-            }
-          }
-
-          class PosSaleScreen extends StatefulWidget {
-            const PosSaleScreen({super.key});
-
-            @override
-            State<PosSaleScreen> createState() => _PosSaleScreenState();
-          }
-
-          class _PosSaleScreenState extends State<PosSaleScreen> {
+            int _selectedTab = 0;
             List<Product> _products = [];
+            List<Map<String, dynamic>> _sales = [];
             final Map<Product, int> _cart = {};
+            String _searchQuery = '';
+            String _selectedCategory = 'All';
             bool _isLoading = true;
 
             @override
             void initState() {
               super.initState();
-              _loadProducts();
+              _loadData();
             }
 
-            Future<void> _loadProducts() async {
+            Future<void> _loadData() async {
               setState(() => _isLoading = true);
               final products = await DatabaseHelper.instance.getAllProducts();
+              final sales = await DatabaseHelper.instance.getSalesHistory();
               setState(() {
                 _products = products;
+                _sales = sales;
                 _isLoading = false;
               });
             }
@@ -287,12 +465,10 @@ workflows:
             void _addToCart(Product product) {
               final currentQty = _cart[product] ?? 0;
               if (currentQty < product.stock) {
-                setState(() {
-                  _cart[product] = currentQty + 1;
-                });
+                setState(() => _cart[product] = currentQty + 1);
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('තොග සීමාව ඉක්මවා ඇත!')),
+                  SnackBar(content: Text(widget.isEnglish ? 'Stock limit reached!' : 'තොග සීමාව ඉක්මවා ඇත!')),
                 );
               }
             }
@@ -310,37 +486,16 @@ workflows:
               }
             }
 
-            Future<void> _scanBarcodeAndAddToCart() async {
-              final String? barcode = await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
-              );
-
-              if (barcode != null && barcode.isNotEmpty) {
-                try {
-                  final product = _products.firstWhere((p) => p.barcode == barcode);
-                  _addToCart(product);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('${product.name} Cart එකට එකතු කළා!')),
-                    );
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Barcode ($barcode) හමු නොවුණි!')),
-                    );
-                  }
-                }
-              }
-            }
-
             double get _totalPrice {
               double total = 0;
-              _cart.forEach((product, qty) {
-                total += product.price * qty;
-              });
+              _cart.forEach((product, qty) => total += product.price * qty);
               return total;
+            }
+
+            double get _totalProfit {
+              double profit = 0;
+              _cart.forEach((product, qty) => profit += (product.price - product.buyingPrice) * qty);
+              return profit;
             }
 
             int get _totalItems {
@@ -360,9 +515,7 @@ workflows:
                     return pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        pw.Center(
-                          child: pw.Text('GROCERY POS STORE', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
-                        ),
+                        pw.Center(child: pw.Text('LANKA SUPER STORE', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16))),
                         pw.SizedBox(height: 4),
                         pw.Text('Date: $dateStr', style: const pw.TextStyle(fontSize: 10)),
                         pw.Divider(),
@@ -392,370 +545,594 @@ workflows:
                 ),
               );
 
-              await DatabaseHelper.instance.recordSale(_totalPrice, _totalItems, _cart);
+              await DatabaseHelper.instance.recordSale(_totalPrice, _totalProfit, _totalItems, _cart);
               setState(() => _cart.clear());
-              await _loadProducts();
-
+              await _loadData();
               await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
             }
 
             @override
             Widget build(BuildContext context) {
+              double todaySales = 0;
+              double todayProfit = 0;
+              final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+              for (var s in _sales) {
+                final date = DateTime.tryParse(s['created_at'] ?? '') ?? DateTime.now();
+                if (DateFormat('yyyy-MM-dd').format(date) == todayStr) {
+                  todaySales += (s['total_amount'] as num).toDouble();
+                  todayProfit += (s['total_profit'] as num?)?.toDouble() ?? 0.0;
+                }
+              }
+
+              int lowStockCount = _products.where((p) => p.stock <= 5).length;
+
               return Scaffold(
-                appBar: AppBar(
-                  title: const Text('POS Sales'),
-                  backgroundColor: Colors.deepPurple,
-                  foregroundColor: Colors.white,
-                  actions: [
-                    IconButton(
-                      icon: const Icon(Icons.qr_code_scanner, size: 28),
-                      onPressed: _scanBarcodeAndAddToCart,
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.refresh),
-                      onPressed: _loadProducts,
-                    )
-                  ],
-                ),
-                body: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : Column(
-                        children: [
-                          Expanded(
-                            child: ListView.builder(
-                              itemCount: _products.length,
-                              itemBuilder: (context, index) {
-                                final product = _products[index];
-                                final qty = _cart[product] ?? 0;
-
-                                return Card(
-                                  margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                  child: ListTile(
-                                    leading: Text(product.icon, style: const TextStyle(fontSize: 28)),
-                                    title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                    subtitle: Text('රු. ${product.price.toStringAsFixed(2)} | තොගය: ${product.stock}'),
-                                    trailing: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (qty > 0) ...[
-                                          IconButton(
-                                            icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
-                                            onPressed: () => _removeFromCart(product),
-                                          ),
-                                          Text('$qty', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                                        ],
-                                        IconButton(
-                                          icon: const Icon(Icons.add_circle_outline, color: Colors.green),
-                                          onPressed: () => _addToCart(product),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.deepPurple.shade50,
-                              boxShadow: [
-                                BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, -2)),
-                              ],
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('භාණ්ඩ ගණන: $_totalItems', style: const TextStyle(fontSize: 14)),
-                                    Text(
-                                      'එකතුව: රු. ${_totalPrice.toStringAsFixed(2)}',
-                                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.deepPurple),
-                                    ),
-                                  ],
-                                ),
-                                ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.deepPurple,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                  ),
-                                  onPressed: _totalItems == 0 ? null : _printReceiptAndSave,
-                                  icon: const Icon(Icons.print),
-                                  label: const Text('Bill & Print'),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-              );
-            }
-          }
-
-          class ProductAdminScreen extends StatefulWidget {
-            const ProductAdminScreen({super.key});
-
-            @override
-            State<ProductAdminScreen> createState() => _ProductAdminScreenState();
-          }
-
-          class _ProductAdminScreenState extends State<ProductAdminScreen> {
-            List<Product> _products = [];
-            bool _isLoading = true;
-
-            @override
-            void initState() {
-              super.initState();
-              _loadProducts();
-            }
-
-            Future<void> _loadProducts() async {
-              setState(() => _isLoading = true);
-              final products = await DatabaseHelper.instance.getAllProducts();
-              setState(() {
-                _products = products;
-                _isLoading = false;
-              });
-            }
-
-            void _showProductForm({Product? product}) {
-              final nameController = TextEditingController(text: product?.name ?? '');
-              final priceController = TextEditingController(text: product != null ? product.price.toString() : '');
-              final stockController = TextEditingController(text: product != null ? product.stock.toString() : '');
-              final barcodeController = TextEditingController(text: product?.barcode ?? '');
-              final iconController = TextEditingController(text: product?.icon ?? '📦');
-
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: Text(product == null ? 'අලුත් භාණ්ඩයක් එක් කරන්න' : 'භාණ්ඩය සංස්කරණය කරන්න'),
-                  content: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        TextField(controller: nameController, decoration: const InputDecoration(labelText: 'භාණ්ඩයේ නම')),
-                        TextField(controller: priceController, decoration: const InputDecoration(labelText: 'මිල (රු.)'), keyboardType: TextInputType.number),
-                        TextField(controller: stockController, decoration: const InputDecoration(labelText: 'තොග ප්‍රමාණය'), keyboardType: TextInputType.number),
-                        Row(
+                body: SafeArea(
+                  child: Column(
+                    children: [
+                      // Top Green Header Bar
+                      Container(
+                        color: const Color(0xFF007A4D),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        child: Row(
                           children: [
-                            Expanded(
-                              child: TextField(controller: barcodeController, decoration: const InputDecoration(labelText: 'Barcode අංකය')),
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                              child: const Icon(Icons.storefront, color: Color(0xFF007A4D), size: 24),
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.qr_code_scanner, color: Colors.deepPurple),
-                              onPressed: () async {
-                                final String? code = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
-                                );
-                                if (code != null) {
-                                  barcodeController.text = code;
-                                }
-                              },
+                            const SizedBox(width: 10),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.isEnglish ? 'Lanka Super' : 'ලංකා සුපර්',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                ),
+                                Text(
+                                  widget.isEnglish ? 'Small Retail Store' : 'කුඩා සිල්ලර වෙළඳසැල',
+                                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        TextField(controller: iconController, decoration: const InputDecoration(labelText: 'Emoji Icon')),
-                      ],
-                    ),
-                  ),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('අවලංගුයි')),
-                    ElevatedButton(
-                      onPressed: () async {
-                        final name = nameController.text.trim();
-                        final price = double.tryParse(priceController.text) ?? 0.0;
-                        final stock = int.tryParse(stockController.text) ?? 0;
-                        final barcode = barcodeController.text.trim();
-                        final icon = iconController.text.trim();
-
-                        if (name.isNotEmpty && price > 0) {
-                          final newProduct = Product(
-                            id: product?.id,
-                            name: name,
-                            price: price,
-                            stock: stock,
-                            barcode: barcode,
-                            icon: icon.isEmpty ? '📦' : icon,
-                          );
-
-                          if (product == null) {
-                            await DatabaseHelper.instance.insertProduct(newProduct);
-                          } else {
-                            await DatabaseHelper.instance.updateProduct(newProduct);
-                          }
-
-                          Navigator.pop(context);
-                          _loadProducts();
-                        }
-                      },
-                      child: const Text('සුරකින්න'),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            Future<void> _deleteProduct(int id) async {
-              await DatabaseHelper.instance.deleteProduct(id);
-              _loadProducts();
-            }
-
-            @override
-            Widget build(BuildContext context) {
-              return Scaffold(
-                appBar: AppBar(
-                  title: const Text('Product Inventory'),
-                  backgroundColor: Colors.deepPurple,
-                  foregroundColor: Colors.white,
-                ),
-                body: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : ListView.builder(
-                        itemCount: _products.length,
-                        itemBuilder: (context, index) {
-                          final product = _products[index];
-                          return Card(
-                            margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            child: ListTile(
-                              leading: Text(product.icon, style: const TextStyle(fontSize: 28)),
-                              title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text('මිල: රු. ${product.price.toStringAsFixed(2)} | තොගය: ${product.stock} | Barcode: ${product.barcode}'),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
+                            const Spacer(),
+                            // Language Switcher Pill
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white24,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
                                 children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit, color: Colors.blue),
-                                    onPressed: () => _showProductForm(product: product),
+                                  GestureDetector(
+                                    onTap: widget.isEnglish ? widget.onToggleLanguage : null,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: !widget.isEnglish ? Colors.white : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Text(
+                                        'සිංහල',
+                                        style: TextStyle(
+                                          color: !widget.isEnglish ? const Color(0xFF007A4D) : Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete, color: Colors.red),
-                                    onPressed: () => _deleteProduct(product.id!),
+                                  GestureDetector(
+                                    onTap: !widget.isEnglish ? widget.onToggleLanguage : null,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: widget.isEnglish ? Colors.white : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Text(
+                                        'EN',
+                                        style: TextStyle(
+                                          color: widget.isEnglish ? const Color(0xFF007A4D) : Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
-                          );
-                        },
+                            const SizedBox(width: 8),
+                            // Flutter Badge
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFF6D00),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Text(
+                                '</> Flutter',
+                                style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            IconButton(
+                              icon: const Icon(Icons.logout, color: Colors.white, size: 20),
+                              onPressed: () {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => PhoneLoginScreen(
+                                      isEnglish: widget.isEnglish,
+                                      onToggleLanguage: widget.onToggleLanguage,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
                       ),
-                floatingActionButton: FloatingActionButton.extended(
-                  onPressed: () => _showProductForm(),
-                  backgroundColor: Colors.deepPurple,
-                  foregroundColor: Colors.white,
-                  icon: const Icon(Icons.add),
-                  label: const Text('අලුත් භාණ්ඩයක්'),
+
+                      // Navigation Bar Tabs
+                      Container(
+                        color: const Color(0xFF00633E),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              _buildNavTab(0, Icons.receipt_long, widget.isEnglish ? 'POS & Billing' : 'බිල්පත් සහ ගනුදෙනු'),
+                              _buildNavTab(1, Icons.inventory, widget.isEnglish ? 'Inventory' : 'බඩු තොග පාලනය'),
+                              _buildNavTab(2, Icons.bar_chart, widget.isEnglish ? 'Daily Reports' : 'දෛනික වාර්තා'),
+                              _buildNavTab(3, Icons.history, widget.isEnglish ? 'Receipt History' : 'බිල්පත් ඉතිහාසය'),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // Content Area
+                      Expanded(
+                        child: _isLoading
+                            ? const Center(child: CircularProgressIndicator())
+                            : _buildTabContent(todaySales, todayProfit, lowStockCount),
+                      ),
+                    ],
+                  ),
                 ),
               );
             }
-          }
 
-          class SalesReportScreen extends StatefulWidget {
-            const SalesReportScreen({super.key});
-
-            @override
-            State<SalesReportScreen> createState() => _SalesReportScreenState();
-          }
-
-          class _SalesReportScreenState extends State<SalesReportScreen> {
-            List<Map<String, dynamic>> _sales = [];
-            bool _isLoading = true;
-
-            @override
-            void initState() {
-              super.initState();
-              _loadSales();
+            Widget _buildNavTab(int index, IconData icon, String title) {
+              final isSelected = _selectedTab == index;
+              return GestureDetector(
+                onTap: () => setState(() => _selectedTab = index),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isSelected ? const Color(0xFF004D30) : Colors.transparent,
+                    border: Border(
+                      bottom: BorderSide(
+                        color: isSelected ? Colors.white : Colors.transparent,
+                        width: 3,
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(icon, color: Colors.white, size: 16),
+                      const SizedBox(width: 6),
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
             }
 
-            Future<void> _loadSales() async {
-              setState(() => _isLoading = true);
-              final sales = await DatabaseHelper.instance.getSalesHistory();
-              setState(() {
-                _sales = sales;
-                _isLoading = false;
-              });
-            }
-
-            double get _totalRevenue {
-              double total = 0;
-              for (var s in _sales) {
-                total += (s['total_amount'] as num).toDouble();
+            Widget _buildTabContent(double todaySales, double todayProfit, int lowStockCount) {
+              if (_selectedTab == 0) {
+                return _buildPosTab(todaySales, todayProfit, lowStockCount);
+              } else if (_selectedTab == 1) {
+                return _buildInventoryTab();
+              } else if (_selectedTab == 2) {
+                return _buildReportsTab(todaySales, todayProfit);
+              } else {
+                return _buildHistoryTab();
               }
-              return total;
             }
+
+            // POS Main Tab
+            Widget _buildPosTab(double todaySales, double todayProfit, int lowStockCount) {
+              final filteredProducts = _products.where((p) {
+                final matchesSearch = p.name.contains(_searchQuery) ||
+                    p.nameEn.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                    p.barcode.contains(_searchQuery);
+                final matchesCat = _selectedCategory == 'All' || p.category == _selectedCategory;
+                return matchesSearch && matchesCat;
+              }).toList();
+
+              return Column(
+                children: [
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.all(12),
+                      children: [
+                        // Dashboard 4 Summary Cards Grid
+                        GridView.count(
+                          crossAxisCount: 2,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          childAspectRatio: 2.1,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                          children: [
+                            _buildStatCard(
+                              widget.isEnglish ? "Today's Sales" : 'අද දින අලෙවිය',
+                              'LKR ${todaySales.toStringAsFixed(0)}',
+                              Colors.orange,
+                              Colors.white,
+                            ),
+                            _buildStatCard(
+                              widget.isEnglish ? "Daily Expenses" : 'දෛනික වියදම්',
+                              'LKR 0',
+                              Colors.blue,
+                              Colors.white,
+                            ),
+                            _buildStatCard(
+                              widget.isEnglish ? "Net Profit" : 'ශුද්ධ ලාභය',
+                              'LKR ${todayProfit.toStringAsFixed(0)}',
+                              Colors.green,
+                              Colors.white,
+                            ),
+                            _buildStatCard(
+                              widget.isEnglish ? "Stock Warning" : 'තොග අනතුරු ඇඟවීම',
+                              '$lowStockCount ${widget.isEnglish ? "Items Low" : "භාණ්ඩ අවම මට්ටමක"}',
+                              Colors.teal,
+                              const Color(0xFFE8F5E9),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // Search Bar
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(25),
+                            boxShadow: [
+                              BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2)),
+                            ],
+                          ),
+                          child: TextField(
+                            onChanged: (val) => setState(() => _searchQuery = val),
+                            decoration: InputDecoration(
+                              hintText: widget.isEnglish ? 'Search name or barcode...' : 'නම හෝ තීරු කේතය (Barcode) මගින් සොයන්න..',
+                              hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                              prefixIcon: const Icon(Icons.search, color: Color(0xFF007A4D)),
+                              suffixIcon: IconButton(
+                                icon: const Icon(Icons.qr_code_scanner, color: Color(0xFF007A4D)),
+                                onPressed: () async {
+                                  final code = await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (context) => BarcodeScannerScreen(isEnglish: widget.isEnglish)),
+                                  );
+                                  if (code != null) {
+                                    setState(() => _searchQuery = code);
+                                  }
+                                },
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // Category Chips Filter
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              _buildCategoryChip('All', widget.isEnglish ? 'All Items' : 'සියලුම භාණ්ඩ'),
+                              _buildCategoryChip('සහල් සහ ධාන්‍ය', widget.isEnglish ? 'Rice & Grains' : 'සහල් සහ ධාන්‍ය'),
+                              _buildCategoryChip('මූලික ද්‍රව්‍ය', widget.isEnglish ? 'Staples' : 'මූලික ද්‍රව්‍ය'),
+                              _buildCategoryChip('කිරි ආහාර', widget.isEnglish ? 'Dairy' : 'කිරි ආහාර'),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // Product Cards Grid
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            childAspectRatio: 0.85,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                          ),
+                          itemCount: filteredProducts.length,
+                          itemBuilder: (context, index) {
+                            final p = filteredProducts[index];
+                            final cartQty = _cart[p] ?? 0;
+                            Color headerColor = _parseColor(p.colorHex);
+
+                            return Card(
+                              elevation: 1,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Top Colored Banner Block
+                                  Container(
+                                    height: 50,
+                                    width: double.infinity,
+                                    decoration: BoxDecoration(
+                                      color: headerColor,
+                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        p.nameEn.isNotEmpty ? p.nameEn : p.name,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.black87.withOpacity(0.7),
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.all(8.0),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(p.category, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                                        Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                        Text(p.nameEn, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                                        const SizedBox(height: 6),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              'LKR ${p.price.toStringAsFixed(2)}/${p.unit}',
+                                              style: const TextStyle(color: Color(0xFF007A4D), fontWeight: FontWeight.bold, fontSize: 11),
+                                            ),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: Colors.grey.shade200,
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text('${p.stock} ${p.unit}', style: const TextStyle(fontSize: 10)),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            if (cartQty > 0) ...[
+                                              InkWell(
+                                                onTap: () => _removeFromCart(p),
+                                                child: const Icon(Icons.remove_circle_outline, color: Colors.red, size: 22),
+                                              ),
+                                              Text('$cartQty', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                            ],
+                                            const Spacer(),
+                                            ElevatedButton(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: const Color(0xFF007A4D),
+                                                foregroundColor: Colors.white,
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                minimumSize: Size.zero,
+                                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                              ),
+                                              onPressed: () => _addToCart(p),
+                                              child: Text(widget.isEnglish ? 'Add' : 'එකතු කරන්න', style: const TextStyle(fontSize: 10)),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Bottom Cart Bar
+                  if (_totalItems > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, -2))],
+                      ),
+                      child: Row(
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('${widget.isEnglish ? "Items" : "භාණ්ඩ ගණන"}: $_totalItems', style: const TextStyle(fontSize: 12)),
+                              Text('LKR ${_totalPrice.toStringAsFixed(2)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF007A4D))),
+                            ],
+                          ),
+                          const Spacer(),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF007A4D),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                            ),
+                            onPressed: _printReceiptAndSave,
+                            icon: const Icon(Icons.print, size: 18),
+                            label: Text(widget.isEnglish ? 'PRINT BILL' : 'බිල්පත Print කරන්න'),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              );
+            }
+
+            Widget _buildStatCard(String title, String val, Color color, Color bg) {
+              return Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: bg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4)],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(title, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                    const SizedBox(height: 2),
+                    Text(val, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87)),
+                    const SizedBox(height: 4),
+                    Container(height: 3, width: 30, color: color),
+                  ],
+                ),
+              );
+            }
+
+            Widget _buildCategoryChip(String catKey, String label) {
+              final isSelected = _selectedCategory == catKey;
+              return Container(
+                margin: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(label),
+                  selected: isSelected,
+                  selectedColor: const Color(0xFF007A4D),
+                  labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black87, fontSize: 12),
+                  onSelected: (val) => setState(() => _selectedCategory = catKey),
+                ),
+              );
+            }
+
+            // Inventory Tab
+            Widget _buildInventoryTab() {
+              return Scaffold(
+                body: ListView.builder(
+                  itemCount: _products.length,
+                  itemBuilder: (context, index) {
+                    final p = _products[index];
+                    return Card(
+                      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      child: ListTile(
+                        title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text('${p.nameEn}\n${widget.isEnglish ? "Buy" : "ගැනුම්"}: LKR ${p.buyingPrice} | ${widget.isEnglish ? "Sell" : "විකුණුම්"}: LKR ${p.price}\n${widget.isEnglish ? "Stock" : "තොගය"}: ${p.stock} ${p.unit}'),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () async {
+                              await DatabaseHelper.instance.deleteProduct(p.id!);
+                              _loadData();
+                            }),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            }
+
+            // Reports Tab
+            Widget _buildReportsTab(double todaySales, double todayProfit) {
+              return Container(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.isEnglish ? "Daily Reports Summary" : 'දෛනික වාර්තා සාරාංශය', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 20),
+                    Card(
+                      child: ListTile(
+                        title: Text(widget.isEnglish ? "Today's Total Sales" : 'අද මුළු අලෙවිය'),
+                        trailing: Text('LKR ${todaySales.toStringAsFixed(2)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF007A4D))),
+                      ),
+                    ),
+                    Card(
+                      child: ListTile(
+                        title: Text(widget.isEnglish ? "Today's Total Profit" : 'අද මුළු ලාභය'),
+                        trailing: Text('LKR ${todayProfit.toStringAsFixed(2)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green)),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            // History Tab
+            Widget _buildHistoryTab() {
+              return ListView.builder(
+                itemCount: _sales.length,
+                itemBuilder: (context, index) {
+                  final sale = _sales[index];
+                  final date = DateTime.tryParse(sale['created_at'] ?? '') ?? DateTime.now();
+                  final formattedDate = DateFormat('yyyy-MM-dd hh:mm a').format(date);
+                  return Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    child: ListTile(
+                      leading: const CircleAvatar(backgroundColor: Color(0xFF007A4D), child: Icon(Icons.receipt, color: Colors.white)),
+                      title: Text('LKR ${(sale['total_amount'] as num).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: Text('$formattedDate\n${widget.isEnglish ? "Profit" : "ලාභය"}: LKR ${(sale['total_profit'] as num).toStringAsFixed(2)}'),
+                    ),
+                  );
+                },
+              );
+            }
+
+            Color _parseColor(String hex) {
+              try {
+                return Color(int.parse(hex.replaceFirst('#', '0xFF')));
+              } catch (e) {
+                return const Color(0xFFBFF3D4);
+              }
+            }
+          }
+
+          class BarcodeScannerScreen extends StatelessWidget {
+            final bool isEnglish;
+            const BarcodeScannerScreen({super.key, required this.isEnglish});
 
             @override
             Widget build(BuildContext context) {
               return Scaffold(
                 appBar: AppBar(
-                  title: const Text('අලෙවි වාර්තා (Sales Reports)'),
-                  backgroundColor: Colors.deepPurple,
+                  title: Text(isEnglish ? 'Scan Barcode' : 'Barcode Scan කරන්න'),
+                  backgroundColor: const Color(0xFF007A4D),
                   foregroundColor: Colors.white,
-                  actions: [
-                    IconButton(
-                      icon: const Icon(Icons.refresh),
-                      onPressed: _loadSales,
-                    )
-                  ],
                 ),
-                body: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : Column(
-                        children: [
-                          Container(
-                            margin: const EdgeInsets.all(12),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.deepPurple,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text('මුළු අලෙවි එකතුව', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                                    Text('රු. ${_totalRevenue.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    const Text('මුළු ගනුදෙනු', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                                    Text('${_sales.length}', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            child: ListView.builder(
-                              itemCount: _sales.length,
-                              itemBuilder: (context, index) {
-                                final sale = _sales[index];
-                                final date = DateTime.tryParse(sale['created_at'] ?? '') ?? DateTime.now();
-                                final formattedDate = DateFormat('yyyy-MM-dd hh:mm a').format(date);
-
-                                return Card(
-                                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                  child: ListTile(
-                                    leading: const CircleAvatar(
-                                      backgroundColor: Colors.deepPurple,
-                                      child: Icon(Icons.receipt_long, color: Colors.white),
-                                    ),
-                                    title: Text('රු. ${(sale['total_amount'] as num).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                    subtitle: Text(formattedDate),
-                                    trailing: Text('භාණ්ඩ: ${sale['total_items']}', style: const TextStyle(fontSize: 14)),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
+                body: MobileScanner(
+                  onDetect: (capture) {
+                    final List<Barcode> barcodes = capture.barcodes;
+                    if (barcodes.isNotEmpty && barcodes.first.rawValue != null) {
+                      Navigator.pop(context, barcodes.first.rawValue!);
+                    }
+                  },
+                ),
               );
             }
           }
