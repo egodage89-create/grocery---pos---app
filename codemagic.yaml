@@ -4,10 +4,10 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m1
     scripts:
-      - name: Create Android project with Barcode Scanner & SQLite
+      - name: Create Android project with Full POS Features
         script: |
           flutter create --platforms=android --org com.example .
-          flutter pub add sqflite path mobile_scanner
+          flutter pub add sqflite path mobile_scanner pdf printing intl
 
           # Add Camera permission to AndroidManifest.xml
           python3 -c "
@@ -26,6 +26,10 @@ workflows:
           import 'package:sqflite/sqflite.dart';
           import 'package:path/path.dart' as p;
           import 'package:mobile_scanner/mobile_scanner.dart';
+          import 'package:pdf/pdf.dart';
+          import 'package:pdf/widgets.dart' as pw;
+          import 'package:printing/printing.dart';
+          import 'package:intl/intl.dart';
 
           void main() {
             WidgetsFlutterBinding.ensureInitialized();
@@ -107,8 +111,20 @@ workflows:
 
               return await openDatabase(
                 path,
-                version: 1,
+                version: 2,
                 onCreate: _createDB,
+                onUpgrade: (db, oldVersion, newVersion) async {
+                  if (oldVersion < 2) {
+                    await db.execute('''
+                      CREATE TABLE sales (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        total_amount REAL NOT NULL,
+                        total_items INTEGER NOT NULL,
+                        created_at TEXT NOT NULL
+                      )
+                    ''');
+                  }
+                },
               );
             }
 
@@ -121,6 +137,15 @@ workflows:
                   stock INTEGER NOT NULL,
                   barcode TEXT,
                   icon TEXT
+                )
+              ''');
+
+              await db.execute('''
+                CREATE TABLE sales (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  total_amount REAL NOT NULL,
+                  total_items INTEGER NOT NULL,
+                  created_at TEXT NOT NULL
                 )
               ''');
 
@@ -150,12 +175,27 @@ workflows:
               return await db.delete('products', where: 'id = ?', whereArgs: [id]);
             }
 
-            Future<void> updateStockAfterSale(int productId, int quantitySold) async {
+            Future<void> recordSale(double totalAmount, int totalItems, Map<Product, int> cartItems) async {
               final db = await instance.database;
-              await db.rawUpdate(
-                'UPDATE products SET stock = stock - ? WHERE id = ?',
-                [quantitySold, productId],
-              );
+              final now = DateTime.now().toIso8601String();
+
+              await db.insert('sales', {
+                'total_amount': totalAmount,
+                'total_items': totalItems,
+                'created_at': now,
+              });
+
+              for (var entry in cartItems.entries) {
+                await db.rawUpdate(
+                  'UPDATE products SET stock = stock - ? WHERE id = ?',
+                  [entry.value, entry.key.id],
+                );
+              }
+            }
+
+            Future<List<Map<String, dynamic>>> getSalesHistory() async {
+              final db = await instance.database;
+              return await db.query('sales', orderBy: 'id DESC');
             }
           }
 
@@ -172,6 +212,7 @@ workflows:
             final List<Widget> _screens = [
               const PosSaleScreen(),
               const ProductAdminScreen(),
+              const SalesReportScreen(),
             ];
 
             @override
@@ -185,6 +226,7 @@ workflows:
                   items: const [
                     BottomNavigationBarItem(icon: Icon(Icons.point_of_sale), label: 'POS විකුණුම්'),
                     BottomNavigationBarItem(icon: Icon(Icons.inventory), label: 'භාණ්ඩ කළමනාකරණය'),
+                    BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'අලෙවි වාර්තා'),
                   ],
                 ),
               );
@@ -224,7 +266,7 @@ workflows:
 
           class _PosSaleScreenState extends State<PosSaleScreen> {
             List<Product> _products = [];
-            final Map<int, int> _cart = {};
+            final Map<Product, int> _cart = {};
             bool _isLoading = true;
 
             @override
@@ -243,10 +285,10 @@ workflows:
             }
 
             void _addToCart(Product product) {
-              final currentQty = _cart[product.id] ?? 0;
+              final currentQty = _cart[product] ?? 0;
               if (currentQty < product.stock) {
                 setState(() {
-                  _cart[product.id!] = currentQty + 1;
+                  _cart[product] = currentQty + 1;
                 });
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -256,13 +298,13 @@ workflows:
             }
 
             void _removeFromCart(Product product) {
-              final currentQty = _cart[product.id];
+              final currentQty = _cart[product];
               if (currentQty != null) {
                 setState(() {
                   if (currentQty > 1) {
-                    _cart[product.id!] = currentQty - 1;
+                    _cart[product] = currentQty - 1;
                   } else {
-                    _cart.remove(product.id);
+                    _cart.remove(product);
                   }
                 });
               }
@@ -286,7 +328,7 @@ workflows:
                 } catch (e) {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Barcode ($barcode) සඳහා භාණ්ඩයක් හමු නොවුණි!')),
+                      SnackBar(content: Text('Barcode ($barcode) හමු නොවුණි!')),
                     );
                   }
                 }
@@ -295,8 +337,7 @@ workflows:
 
             double get _totalPrice {
               double total = 0;
-              _cart.forEach((id, qty) {
-                final product = _products.firstWhere((p) => p.id == id);
+              _cart.forEach((product, qty) {
                 total += product.price * qty;
               });
               return total;
@@ -308,12 +349,54 @@ workflows:
               return count;
             }
 
-            Future<void> _processCheckout() async {
-              for (var entry in _cart.entries) {
-                await DatabaseHelper.instance.updateStockAfterSale(entry.key, entry.value);
-              }
+            Future<void> _printReceiptAndSave() async {
+              final pdf = pw.Document();
+              final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+
+              pdf.addPage(
+                pw.Page(
+                  pageFormat: PdfPageFormat.roll80,
+                  build: (pw.Context context) {
+                    return pw.Column(
+                      cross: pw.CrossAlignment.start,
+                      children: [
+                        pw.Center(
+                          child: pw.Text('GROCERY POS STORE', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
+                        ),
+                        pw.SizedBox(height: 4),
+                        pw.Text('Date: $dateStr', style: const pw.TextStyle(fontSize: 10)),
+                        pw.Divider(),
+                        ..._cart.entries.map((e) => pw.Padding(
+                              padding: const pw.EdgeInsets.symmetric(vertical: 2),
+                              child: pw.Row(
+                                mainpw: pw.MainAxisAlignment.spaceBetween,
+                                children: [
+                                  pw.Text('${e.key.name} x${e.value}', style: const pw.TextStyle(fontSize: 10)),
+                                  pw.Text('LKR ${(e.key.price * e.value).toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 10)),
+                                ],
+                              ),
+                            )),
+                        pw.Divider(),
+                        pw.Row(
+                          mainpw: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text('TOTAL:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
+                            pw.Text('LKR ${_totalPrice.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
+                          ],
+                        ),
+                        pw.SizedBox(height: 10),
+                        pw.Center(child: pw.Text('Thank You! Come Again.', style: const pw.TextStyle(fontSize: 10))),
+                      ],
+                    );
+                  },
+                ),
+              );
+
+              await DatabaseHelper.instance.recordSale(_totalPrice, _totalItems, _cart);
               setState(() => _cart.clear());
               await _loadProducts();
+
+              await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
             }
 
             @override
@@ -326,7 +409,6 @@ workflows:
                   actions: [
                     IconButton(
                       icon: const Icon(Icons.qr_code_scanner, size: 28),
-                      tooltip: 'Barcode Scan',
                       onPressed: _scanBarcodeAndAddToCart,
                     ),
                     IconButton(
@@ -344,7 +426,7 @@ workflows:
                               itemCount: _products.length,
                               itemBuilder: (context, index) {
                                 final product = _products[index];
-                                final qty = _cart[product.id] ?? 0;
+                                final qty = _cart[product] ?? 0;
 
                                 return Card(
                                   margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -400,28 +482,9 @@ workflows:
                                     foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                                   ),
-                                  onPressed: _totalItems == 0
-                                      ? null
-                                      : () {
-                                          showDialog(
-                                            context: context,
-                                            builder: (context) => AlertDialog(
-                                              title: const Text('ගෙවීම සාර්ථකයි!'),
-                                              content: Text('මුළු මුදල: රු. ${_totalPrice.toStringAsFixed(2)}'),
-                                              actions: [
-                                                TextButton(
-                                                  onPressed: () async {
-                                                    Navigator.pop(context);
-                                                    await _processCheckout();
-                                                  },
-                                                  child: const Text('OK'),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        },
+                                  onPressed: _totalItems == 0 ? null : _printReceiptAndSave,
                                   icon: const Icon(Icons.print),
-                                  label: const Text('Bill කරමු'),
+                                  label: const Text('Bill & Print'),
                                 ),
                               ],
                             ),
@@ -479,7 +542,7 @@ workflows:
                         Row(
                           children: [
                             Expanded(
-                              child: TextField(controller: barcodeController, decoration: const InputDecoration(labelText: 'Barcode අංකය')),
+                              child: TextField(controller: barcodeController, decoration: const InputDecoration(labelText: 'Barcode અංකය')),
                             ),
                             IconButton(
                               icon: const Icon(Icons.qr_code_scanner, color: Colors.deepPurple),
@@ -585,6 +648,114 @@ workflows:
                   icon: const Icon(Icons.add),
                   label: const Text('අලුත් භාණ්ඩයක්'),
                 ),
+              );
+            }
+          }
+
+          class SalesReportScreen extends StatefulWidget {
+            const SalesReportScreen({super.key});
+
+            @override
+            State<SalesReportScreen> createState() => _SalesReportScreenState();
+          }
+
+          class _SalesReportScreenState extends State<SalesReportScreen> {
+            List<Map<String, dynamic>> _sales = [];
+            bool _isLoading = true;
+
+            @override
+            void initState() {
+              super.initState();
+              _loadSales();
+            }
+
+            Future<void> _loadSales() async {
+              setState(() => _isLoading = true);
+              final sales = await DatabaseHelper.instance.getSalesHistory();
+              setState(() {
+                _sales = sales;
+                _isLoading = false;
+              });
+            }
+
+            double get _totalRevenue {
+              double total = 0;
+              for (var s in _sales) {
+                total += (s['total_amount'] as num).toDouble();
+              }
+              return total;
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                appBar: AppBar(
+                  title: const Text('අලෙවි වාර්තා (Sales Reports)'),
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
+                  actions: [
+                    IconButton(
+                      icon: const Icon(Icons.refresh),
+                      onPressed: _loadSales,
+                    )
+                  ],
+                ),
+                body: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : Column(
+                        children: [
+                          Container(
+                            margin: const EdgeInsets.all(12),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.deepPurple,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('මුළු අලෙවි එකතුව', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                                    Text('රු. ${_totalRevenue.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    const Text('මුළු ගනුදෙනු', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                                    Text('${_sales.length}', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: ListView.builder(
+                              itemCount: _sales.length,
+                              itemBuilder: (context, index) {
+                                final sale = _sales[index];
+                                final date = DateTime.tryParse(sale['created_at'] ?? '') ?? DateTime.now();
+                                final formattedDate = DateFormat('yyyy-MM-dd hh:mm a').format(date);
+
+                                return Card(
+                                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                  child: ListTile(
+                                    leading: const CircleAvatar(
+                                      backgroundColor: Colors.deepPurple,
+                                      child: Icon(Icons.receipt_long, color: Colors.white),
+                                    ),
+                                    title: Text('රු. ${(sale['total_amount'] as num).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    subtitle: Text(formattedDate),
+                                    trailing: Text('භාණ්ඩ: ${sale['total_items']}', style: const TextStyle(fontSize: 14)),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
               );
             }
           }
