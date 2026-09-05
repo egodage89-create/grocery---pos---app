@@ -358,7 +358,7 @@ workflows:
                   pageFormat: PdfPageFormat.roll80,
                   build: (pw.Context context) {
                     return pw.Column(
-                      cross: pw.CrossAlignment.start,
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
                         pw.Center(
                           child: pw.Text('GROCERY POS STORE', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
@@ -369,7 +369,7 @@ workflows:
                         ..._cart.entries.map((e) => pw.Padding(
                               padding: const pw.EdgeInsets.symmetric(vertical: 2),
                               child: pw.Row(
-                                mainpw: pw.MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                                 children: [
                                   pw.Text('${e.key.name} x${e.value}', style: const pw.TextStyle(fontSize: 10)),
                                   pw.Text('LKR ${(e.key.price * e.value).toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 10)),
@@ -378,7 +378,7 @@ workflows:
                             )),
                         pw.Divider(),
                         pw.Row(
-                          mainpw: pw.MainAxisAlignment.spaceBetween,
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                           children: [
                             pw.Text('TOTAL:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
                             pw.Text('LKR ${_totalPrice.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
@@ -542,7 +542,7 @@ workflows:
                         Row(
                           children: [
                             Expanded(
-                              child: TextField(controller: barcodeController, decoration: const InputDecoration(labelText: 'Barcode અංකය')),
+                              child: TextField(controller: barcodeController, decoration: const InputDecoration(labelText: 'Barcode අංකය')),
                             ),
                             IconButton(
                               icon: const Icon(Icons.qr_code_scanner, color: Colors.deepPurple),
