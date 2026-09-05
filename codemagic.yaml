@@ -4,15 +4,28 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m1
     scripts:
-      - name: Create Android project and apply SQLite POS UI
+      - name: Create Android project with Barcode Scanner & SQLite
         script: |
           flutter create --platforms=android --org com.example .
-          flutter pub add sqflite path
+          flutter pub add sqflite path mobile_scanner
+
+          # Add Camera permission to AndroidManifest.xml
+          python3 -c "
+          path = 'android/app/src/main/AndroidManifest.xml'
+          with open(path, 'r') as f:
+              content = f.read()
+          if 'android.permission.CAMERA' not in content:
+              content = content.replace('<application', '<uses-permission android:name=\"android.permission.CAMERA\"/>\n    <application')
+              with open(path, 'w') as f:
+                  f.write(content)
+          "
+
           mkdir -p lib
           cat << 'EOF' > lib/main.dart
           import 'package:flutter/material.dart';
           import 'package:sqflite/sqflite.dart';
           import 'package:path/path.dart' as p;
+          import 'package:mobile_scanner/mobile_scanner.dart';
 
           void main() {
             WidgetsFlutterBinding.ensureInitialized();
@@ -178,6 +191,30 @@ workflows:
             }
           }
 
+          class BarcodeScannerScreen extends StatelessWidget {
+            const BarcodeScannerScreen({super.key});
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                appBar: AppBar(
+                  title: const Text('Barcode Scan කරන්න'),
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
+                ),
+                body: MobileScanner(
+                  onDetect: (capture) {
+                    final List<Barcode> barcodes = capture.barcodes;
+                    if (barcodes.isNotEmpty && barcodes.first.rawValue != null) {
+                      final String code = barcodes.first.rawValue!;
+                      Navigator.pop(context, code);
+                    }
+                  },
+                ),
+              );
+            }
+          }
+
           class PosSaleScreen extends StatefulWidget {
             const PosSaleScreen({super.key});
 
@@ -231,6 +268,31 @@ workflows:
               }
             }
 
+            Future<void> _scanBarcodeAndAddToCart() async {
+              final String? barcode = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
+              );
+
+              if (barcode != null && barcode.isNotEmpty) {
+                try {
+                  final product = _products.firstWhere((p) => p.barcode == barcode);
+                  _addToCart(product);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('${product.name} Cart එකට එකතු කළා!')),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Barcode ($barcode) සඳහා භාණ්ඩයක් හමු නොවුණි!')),
+                    );
+                  }
+                }
+              }
+            }
+
             double get _totalPrice {
               double total = 0;
               _cart.forEach((id, qty) {
@@ -262,6 +324,11 @@ workflows:
                   backgroundColor: Colors.deepPurple,
                   foregroundColor: Colors.white,
                   actions: [
+                    IconButton(
+                      icon: const Icon(Icons.qr_code_scanner, size: 28),
+                      tooltip: 'Barcode Scan',
+                      onPressed: _scanBarcodeAndAddToCart,
+                    ),
                     IconButton(
                       icon: const Icon(Icons.refresh),
                       onPressed: _loadProducts,
@@ -409,7 +476,25 @@ workflows:
                         TextField(controller: nameController, decoration: const InputDecoration(labelText: 'භාණ්ඩයේ නම')),
                         TextField(controller: priceController, decoration: const InputDecoration(labelText: 'මිල (රු.)'), keyboardType: TextInputType.number),
                         TextField(controller: stockController, decoration: const InputDecoration(labelText: 'තොග ප්‍රමාණය'), keyboardType: TextInputType.number),
-                        TextField(controller: barcodeController, decoration: const InputDecoration(labelText: 'Barcode අංකය')),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(controller: barcodeController, decoration: const InputDecoration(labelText: 'Barcode අංකය')),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.qr_code_scanner, color: Colors.deepPurple),
+                              onPressed: () async {
+                                final String? code = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
+                                );
+                                if (code != null) {
+                                  barcodeController.text = code;
+                                }
+                              },
+                            ),
+                          ],
+                        ),
                         TextField(controller: iconController, decoration: const InputDecoration(labelText: 'Emoji Icon')),
                       ],
                     ),
